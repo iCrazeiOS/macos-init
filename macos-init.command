@@ -1,100 +1,179 @@
 #!/bin/bash
 
-set_dock() {
-    # Set the Dock position
-    defaults write com.apple.dock "orientation" -string "left"
+# --- Options ----------------------------------------------------------------
 
-    # Autohide the Dock when the mouse is out
-    defaults write com.apple.dock "autohide" -bool "true"
+dock_desc=(
+    "Position Dock on the left"
+    "Autohide the Dock"
+    "Fast Dock open/close animation"
+    "No Dock autohide delay"
+    "No recent apps in the Dock"
+    "Scroll up on Dock icon to show all windows / open stack"
+)
+dock_cmd=(
+    'defaults write com.apple.dock "orientation" -string "left"'
+    'defaults write com.apple.dock "autohide" -bool "true"'
+    'defaults write com.apple.dock "autohide-time-modifier" -float "0.1"'
+    'defaults write com.apple.dock "autohide-delay" -float "0"'
+    'defaults write com.apple.dock "show-recents" -bool "false"'
+    'defaults write com.apple.dock "scroll-to-open" -bool "true"'
+)
 
-    # Change the Dock opening and closing animation times
-    defaults write com.apple.dock "autohide-time-modifier" -float "0.1"
+finder_desc=(
+    "Show all file extensions"
+    "Show hidden files"
+    "Show path bar"
+    "No toolbar title hover delay"
+    "Show folder icon in title bar"
+    "Keep folders on top when sorting by name"
+    "Default search scope: current folder"
+    "Save new documents to home, not iCloud"
+    "No warning when changing a file extension"
+)
+finder_cmd=(
+    'defaults write NSGlobalDomain "AppleShowAllExtensions" -bool "true"'
+    'defaults write com.apple.finder "AppleShowAllFiles" -bool "true"'
+    'defaults write com.apple.finder "ShowPathbar" -bool "true"'
+    'defaults write NSGlobalDomain "NSToolbarTitleViewRolloverDelay" -float "0"'
+    'defaults write com.apple.universalaccess "showWindowTitlebarIcons" -bool "true"'
+    'defaults write com.apple.finder "_FXSortFoldersFirst" -bool "true"'
+    'defaults write com.apple.finder "FXDefaultSearchScope" -string "SCcf"'
+    'defaults write NSGlobalDomain "NSDocumentSaveNewDocumentsToCloud" -bool "false"'
+    'defaults write com.apple.finder "FXEnableExtensionChangeWarning" -bool "false"'
+)
 
-    # Remove the autohide delay, the Dock appears instantly
-    defaults write com.apple.dock "autohide-delay" -float "0"
+screenshots_desc=(
+    "No window shadow in screenshots"
+    "No thumbnail preview after capture"
+)
+screenshots_cmd=(
+    'defaults write com.apple.screencapture "disable-shadow" -bool "true"'
+    'defaults write com.apple.screencapture "show-thumbnail" -bool "false"'
+)
 
-    # Do not display recent apps in the Dock
-    defaults write com.apple.dock "show-recents" -bool "false"
+# --- Preset prompt ------------------------------------------------------------
 
-    # Scroll up on a Dock icon to show all Space's opened windows for an app, or open stack
-    defaults write com.apple.dock "scroll-to-open" -bool "true"
-}
-
-set_finder() {
-    # Show all file extensions in the Finder
-    defaults write NSGlobalDomain "AppleShowAllExtensions" -bool "true"
-
-    # Show hidden files in the Finder
-    defaults write com.apple.finder "AppleShowAllFiles" -bool "true"
-
-    # Show path bar in the bottom of the Finder windows
-    defaults write com.apple.finder "ShowPathbar" -bool "true"
-
-    # Remove the delay when hovering the toolbar title
-    defaults write NSGlobalDomain "NSToolbarTitleViewRolloverDelay" -float "0"
-
-    # Show folder icon before title in the title bar
-    defaults write com.apple.universalaccess "showWindowTitlebarIcons" -bool "true"
-
-    # Keep folders on top when sorting by name
-    defaults write com.apple.finder "_FXSortFoldersFirst" -bool "true"
-
-    # Set the default search scope to the current folder
-    defaults write com.apple.finder "FXDefaultSearchScope" -string "SCcf"
-
-    # Open the home directory instead of iCloud when saving a new document
-    defaults write NSGlobalDomain "NSDocumentSaveNewDocumentsToCloud" -bool "false"
-
-    # Do not display a warning when changing a file extension
-    defaults write com.apple.finder "FXEnableExtensionChangeWarning" -bool "false"
-}
-
-set_screenshots() {
-    # Remove the default shadow from screenshots
-    defaults write com.apple.screencapture "disable-shadow" -bool "true"
-
-    # Do not display the thumbnail after taking a screenshot
-    defaults write com.apple.screencapture "show-thumbnail" -bool "false"
-}
-
-echo "Which category?"
+echo "Which preset would you like to apply?"
 echo "  1) Dock"
 echo "  2) Finder"
 echo "  3) Screenshots"
 echo "  4) All"
 read -r -p "Choice (1/2/3/4): " choice
 
-kill_dock=false
-kill_finder=false
+# Build the flat option list (category, description, command) for the preset
+opt_cat=(); opt_desc=(); opt_cmd=()
+
+add_category() {
+    local cat="$1"
+    local desc_name="$2_desc[@]"
+    local cmd_name="$2_cmd[@]"
+    local descs=("${!desc_name}")
+    local cmds=("${!cmd_name}")
+    local i
+    for ((i = 0; i < ${#descs[@]}; i++)); do
+        opt_cat+=("$cat")
+        opt_desc+=("${descs[i]}")
+        opt_cmd+=("${cmds[i]}")
+    done
+}
 
 case "$choice" in
-    1)
-        set_dock
-        kill_dock=true
-        ;;
-    2)
-        set_finder
-        kill_finder=true
-        ;;
-    3)
-        set_screenshots
-        ;;
+    1) add_category "Dock" dock ;;
+    2) add_category "Finder" finder ;;
+    3) add_category "Screenshots" screenshots ;;
     4)
-        set_dock
-        set_finder
-        set_screenshots
-        kill_dock=true
-        kill_finder=true
+        add_category "Dock" dock
+        add_category "Finder" finder
+        add_category "Screenshots" screenshots
         ;;
     *) echo "Invalid choice"; exit 1 ;;
 esac
 
-if $kill_dock && $kill_finder; then
-    killall Dock Finder
-elif $kill_dock; then
-    killall Dock
-elif $kill_finder; then
-    killall Finder
-fi
+# --- Interactive multi-select -------------------------------------------------
 
-echo "Done"
+cursor=0
+selected=()
+for ((i = 0; i < ${#opt_desc[@]}; i++)); do
+    selected[i]=1
+done
+
+draw_menu() {
+    menu_lines=0
+    echo ""
+    ((menu_lines++))
+    echo "Use UP/DOWN to move, SPACE to toggle, ENTER to confirm"
+    ((menu_lines++))
+    echo ""
+    ((menu_lines++))
+    local last_cat="" mark pointer i
+    for ((i = 0; i < ${#opt_desc[@]}; i++)); do
+        if [[ ${opt_cat[i]} != "$last_cat" ]]; then
+            [[ -n $last_cat ]] && { echo ""; ((menu_lines++)); }
+            echo "${opt_cat[i]}:"
+            ((menu_lines++))
+            last_cat=${opt_cat[i]}
+        fi
+        mark="[ ]"
+        [[ ${selected[i]} -eq 1 ]] && mark="[*]"
+        pointer="  "
+        [[ $i -eq $cursor ]] && pointer="> "
+        echo "${pointer}${mark} ${opt_desc[i]}"
+        ((menu_lines++))
+    done
+}
+
+tput civis
+draw_menu
+while true; do
+    IFS= read -rsn1 key
+    case "$key" in
+        $'\x1b')
+            read -rsn2 -t 1 key
+            case "$key" in
+                '[A') ((cursor > 0)) && ((cursor--)) ;;
+                '[B') ((cursor < ${#opt_desc[@]} - 1)) && ((cursor++)) ;;
+            esac
+            ;;
+        ' ')
+            if [[ ${selected[cursor]} -eq 1 ]]; then
+                selected[cursor]=0
+            else
+                selected[cursor]=1
+            fi
+            ;;
+        '')
+            break
+            ;;
+        *) continue ;;
+    esac
+    tput cuu "$menu_lines"
+    draw_menu
+done
+tput cnorm
+echo ""
+
+# --- Apply --------------------------------------------------------------------
+
+kill_dock=false
+kill_finder=false
+applied=0
+
+for ((i = 0; i < ${#opt_cmd[@]}; i++)); do
+    [[ ${selected[i]} -eq 1 ]] || continue
+    eval "${opt_cmd[i]}"
+    ((applied++))
+    case "${opt_cat[i]}" in
+        Dock) kill_dock=true ;;
+        Finder) kill_finder=true ;;
+    esac
+done
+
+restart_app() {
+    echo "Restarting $1..."
+    killall "$1"
+}
+
+$kill_dock && restart_app Dock
+$kill_finder && restart_app Finder
+
+echo "Applied $applied preferences"
