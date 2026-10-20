@@ -1,8 +1,10 @@
 # macos-init
 
-One script to apply macOS settings for Dock, Finder, and screenshots.
+One script to apply some macOS settings for Dock, Finder, and screenshots.
 
 These are just some random settings that I like to set on each machine.
+
+The script allows you to pick and choose which options get set.
 
 ## Features
 
